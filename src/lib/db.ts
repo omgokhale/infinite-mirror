@@ -168,3 +168,34 @@ export async function clearAllData(): Promise<void> {
   await tx.objectStore(ITERATIONS_STORE).clear();
   await tx.done;
 }
+
+export function getImageDimensions(blob: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.width, height: img.height });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = url;
+  });
+}
+
+export function getBestImageSize(width: number, height: number): '1024x1024' | '1536x1024' | '1024x1536' {
+  const ratio = width / height;
+
+  // Landscape: ratio > 1.2 (wider than 6:5)
+  if (ratio > 1.2) {
+    return '1536x1024';
+  }
+  // Portrait: ratio < 0.83 (taller than 5:6)
+  if (ratio < 0.83) {
+    return '1024x1536';
+  }
+  // Square-ish
+  return '1024x1024';
+}

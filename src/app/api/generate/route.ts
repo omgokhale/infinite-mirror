@@ -4,7 +4,7 @@ import { GENERATION_PROMPT, IMAGE_MODEL } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, prompt } = await request.json();
+    const { imageBase64, prompt, size } = await request.json();
 
     if (!imageBase64) {
       return NextResponse.json(
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       model: IMAGE_MODEL,
       image: imageFile,
       prompt: prompt || GENERATION_PROMPT,
-      size: '1024x1024',
+      size: size || '1024x1024',
       quality: 'high',
       input_fidelity: 'high',
     });

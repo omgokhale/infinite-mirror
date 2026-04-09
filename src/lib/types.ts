@@ -29,9 +29,12 @@ export interface RunWithIterations extends Run {
   iterations: IterationWithUrl[];
 }
 
+export type ImageSize = '1024x1024' | '1536x1024' | '1024x1536';
+
 export interface GenerateRequest {
   imageBase64: string;
   prompt?: string;
+  size?: ImageSize;
 }
 
 export interface GenerateResponse {

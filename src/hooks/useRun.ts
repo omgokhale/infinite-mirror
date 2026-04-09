@@ -11,7 +11,10 @@ import {
   deleteRun,
   blobToBase64,
   base64ToBlob,
+  getImageDimensions,
+  getBestImageSize,
 } from '@/lib/db';
+import type { ImageSize } from '@/lib/types';
 import { DEFAULT_ITERATION_COUNT, GENERATION_PROMPT } from '@/lib/constants';
 
 interface UseRunState {
@@ -40,6 +43,7 @@ export function useRun(): UseRunState & UseRunActions {
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('current');
+  const [imageSize, setImageSize] = useState<ImageSize>('1024x1024');
 
   const refreshRun = useCallback(async (runId: string) => {
     const updated = await getRunWithIterations(runId);
@@ -56,6 +60,12 @@ export function useRun(): UseRunState & UseRunActions {
       const run = await dbCreateRun(iterationCount);
 
       const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+
+      // Detect image dimensions and set appropriate size
+      const dimensions = await getImageDimensions(blob);
+      const bestSize = getBestImageSize(dimensions.width, dimensions.height);
+      setImageSize(bestSize);
+
       await createIteration(run.id, 0, blob);
 
       await dbUpdateRun({ id: run.id, status: 'idle', currentStep: 0 });
@@ -132,7 +142,8 @@ export function useRun(): UseRunState & UseRunActions {
   const generateNextIteration = useCallback(async (
     runId: string,
     currentIndex: number,
-    inputImageUrl: string
+    inputImageUrl: string,
+    size: ImageSize
   ): Promise<boolean> => {
     try {
       let imageBase64: string;
@@ -153,6 +164,7 @@ export function useRun(): UseRunState & UseRunActions {
         body: JSON.stringify({
           imageBase64,
           prompt: GENERATION_PROMPT,
+          size,
         }),
       });
 
@@ -194,7 +206,7 @@ export function useRun(): UseRunState & UseRunActions {
           throw new Error(`Missing iteration ${i}`);
         }
 
-        const success = await generateNextIteration(run.id, i, inputIteration.imageUrl);
+        const success = await generateNextIteration(run.id, i, inputIteration.imageUrl, imageSize);
 
         if (!success) {
           await dbUpdateRun({
@@ -221,7 +233,7 @@ export function useRun(): UseRunState & UseRunActions {
     } finally {
       setIsGenerating(false);
     }
-  }, [run, isGenerating, refreshRun, generateNextIteration]);
+  }, [run, isGenerating, refreshRun, generateNextIteration, imageSize]);
 
   const clearRun = useCallback(async () => {
     if (run && !run.isDemo) {
