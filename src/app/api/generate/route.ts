@@ -4,7 +4,7 @@ import { GENERATION_PROMPT, IMAGE_MODEL } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, prompt, size } = await request.json();
+    const { imageBase64, prompt, size, fastMode } = await request.json();
 
     if (!imageBase64) {
       return NextResponse.json(
@@ -27,13 +27,18 @@ export async function POST(request: NextRequest) {
     const imageBuffer = Buffer.from(imageBase64, 'base64');
     const imageFile = new File([imageBuffer], 'input.png', { type: 'image/png' });
 
+    // Fast mode uses gpt-image-1-mini with lower quality for ~2x speed
+    const model = fastMode ? 'gpt-image-1-mini' : IMAGE_MODEL;
+    const quality = fastMode ? 'medium' : 'high';
+    const inputFidelity = fastMode ? 'low' : 'high';
+
     const response = await openai.images.edit({
-      model: IMAGE_MODEL,
+      model,
       image: imageFile,
       prompt: prompt || GENERATION_PROMPT,
       size: size || '1024x1024',
-      quality: 'high',
-      input_fidelity: 'high',
+      quality,
+      input_fidelity: inputFidelity,
     });
 
     const generatedImage = response.data?.[0]?.b64_json;

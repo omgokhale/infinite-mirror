@@ -15,9 +15,11 @@ interface UploadFormProps {
   onLoadDemo: () => void;
   isLoading: boolean;
   hasRun: boolean;
+  fastMode: boolean;
+  onFastModeChange: (enabled: boolean) => void;
 }
 
-export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun }: UploadFormProps) {
+export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, onFastModeChange }: UploadFormProps) {
   const [iterationCount, setIterationCount] = useState(DEFAULT_ITERATION_COUNT);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +153,18 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun }: UploadFo
         />
         <span className="text-sm font-medium w-8 text-center">{iterationCount}</span>
       </div>
+
+      <label className="flex items-center justify-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={fastMode}
+          onChange={(e) => onFastModeChange(e.target.checked)}
+          disabled={isLoading}
+          className="w-4 h-4 rounded border-neutral-300"
+        />
+        <span className="text-sm text-neutral-600">Fast Mode</span>
+        <span className="text-xs text-neutral-400">(~2x faster, more drift)</span>
+      </label>
 
       <p className="text-xs text-neutral-400 text-center">
         1 original + {iterationCount - 1} AI recreations

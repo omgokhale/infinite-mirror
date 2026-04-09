@@ -8,210 +8,240 @@ This document tracks development progress and key decisions for future agents pi
 
 **Infinite Mirror** is a web app that demonstrates iterative image drift. Users upload an image, and the app uses OpenAI's image model to "faithfully recreate" it multiple times in sequence. Each output becomes the input for the next iteration, showing how AI recreation introduces cumulative drift.
 
+**Live Status:** MVP complete and tested with real OpenAI API.
+
 ---
 
 ## Session Log
 
-### Session 1 — April 8, 2026
+### Session 1 — April 8-9, 2026
 
 **Agent:** Claude Opus 4.5
 
 **Work Completed:**
-1. Reviewed original spec.md with user
-2. Identified critical issue: OpenAI DALL-E 3 doesn't support image input
-3. Researched OpenAI API — confirmed gpt-image-1 supports images.edit endpoint
-4. Discussed and resolved architecture decisions with user
-5. Created Next.js 16 project with TypeScript and Tailwind
-6. Wrote updated spec.md reflecting all decisions
-7. Created this context-prime.md file
 
-**Key Decisions Made:**
-- **No server storage**: All images stored client-side in IndexedDB
-- **No database**: No Supabase, no Postgres — pure client-side app
-- **Client-orchestrated generation**: Each iteration is a separate API call from client
-- **Demo fixture**: Pre-generated run checked into /public/demo/ for instant demo
-- **Single API route**: Only /api/generate for proxying OpenAI calls
-- **gpt-image-1**: Using images.edit endpoint for image-to-image generation
-- **11 iterations default**: 1 original + 10 generated
-- **1024×1024**: Fixed image size
-- **4MB max upload**: Reasonable limit for public app
-- **GIF export**: Included in MVP
-- **Both comparison modes**: Draggable slider (priority) + side-by-side
+1. **Spec Review & Architecture Planning**
+   - Reviewed original spec.md with user
+   - Identified critical issue: OpenAI DALL-E 3 doesn't support image input
+   - Researched OpenAI API — confirmed gpt-image-1 supports images.edit endpoint
+   - Simplified architecture: no server storage, pure client-side with IndexedDB
 
-**MVP Completed:**
-- Full project structure created
-- All TypeScript types defined
-- IndexedDB storage layer implemented
-- Demo fixture with SVG placeholders
-- All UI components built
-- OpenAI API route working
-- Generation loop implemented
-- GIF export working
-- Initial commit made
+2. **MVP Implementation**
+   - Created Next.js 16 project with TypeScript and Tailwind
+   - Built IndexedDB storage layer for client-side persistence
+   - Created OpenAI API proxy route (`/api/generate`)
+   - Built all UI components:
+     - UploadForm with drag-and-drop
+     - Filmstrip for iteration thumbnails
+     - ComparisonSlider (draggable overlay)
+     - SideBySide view
+     - GridView
+     - ProgressIndicator
+     - GifExport
+   - Created demo fixture with SVG placeholders
+   - Implemented client-orchestrated generation loop
 
----
+3. **User Testing & Enhancements**
+   - Set up `.env.local` with user's OpenAI API key
+   - Tested real generation (works, ~30-60 seconds per image)
+   - **Added dynamic aspect ratio support:**
+     - Detects input image dimensions
+     - Uses `1536x1024` for landscape, `1024x1536` for portrait, `1024x1024` for square
+   - **Added Fast Mode:**
+     - Checkbox in upload form
+     - Uses `gpt-image-1-mini` instead of `gpt-image-1`
+     - Sets `quality: 'medium'` and `input_fidelity: 'low'`
+     - ~2x faster, with more visible drift per iteration
 
-### Session 1 Completion — April 8-9, 2026
-
-**Status:** MVP COMPLETE
-
-All core features implemented:
-- Upload form with drag-and-drop
-- Filmstrip showing all iterations
-- Draggable comparison slider
-- Side-by-side view
-- Grid view
-- GIF export
-- Demo mode with placeholder images
-- Progress indicator during generation
-
-**Ready for:**
-- User testing with real OpenAI API key
-- Replacement of demo placeholders with real generated images
-- Deployment to Vercel
+**Git Commits:**
+1. `Initial implementation of Infinite Mirror` - Full MVP
+2. `Add dynamic aspect ratio matching for image generation`
+3. (Pending) Fast Mode implementation
 
 ---
 
-## Architecture Quick Reference
+## Architecture
 
 ```
 Browser (Client)                    Server (Next.js API)
      │                                      │
      │  1. User uploads image               │
-     │  2. Store in IndexedDB               │
+     │  2. Detect dimensions → choose size  │
+     │  3. Store in IndexedDB               │
      │                                      │
-     │  3. POST /api/generate ─────────────►│
-     │     { imageBase64, prompt }          │
-     │                                      │  4. Call OpenAI images.edit
-     │  5. Receive result ◄────────────────│
-     │  6. Store in IndexedDB               │
+     │  4. POST /api/generate ─────────────►│
+     │     { imageBase64, prompt,           │
+     │       size, fastMode }               │
+     │                                      │  5. Call OpenAI images.edit
+     │  6. Receive result ◄────────────────│     (gpt-image-1 or mini)
+     │  7. Store in IndexedDB               │
      │                                      │
-     │  7. Repeat 3-6 for each iteration    │
+     │  8. Repeat 4-7 for each iteration    │
      │                                      │
 ```
 
-**No database. No server storage. Images live in browser IndexedDB.**
+**Key Points:**
+- No database, no server storage
+- Images live in browser IndexedDB
+- Client orchestrates the generation loop (one API call per iteration)
+- Generation continues only while browser tab is active/visible
 
 ---
 
-## File Structure (Target)
+## File Structure (Actual)
 
 ```
 /src
   /app
-    page.tsx                    # Main page
+    page.tsx                    # Main page with all UI logic
     layout.tsx                  # Root layout
-    /api/generate/route.ts      # OpenAI proxy
+    /api/generate/route.ts      # OpenAI proxy endpoint
   /components
-    Filmstrip.tsx
-    ComparisonSlider.tsx
-    SideBySide.tsx
-    GridView.tsx
-    ImageViewer.tsx
-    UploadForm.tsx
-    DemoButton.tsx
-    ProgressIndicator.tsx
-  /lib
-    db.ts                       # IndexedDB operations
-    openai.ts                   # API helpers
-    types.ts                    # TypeScript interfaces
-    constants.ts                # Prompts, defaults
-    gif.ts                      # GIF generation
+    ComparisonSlider.tsx        # Draggable image comparison
+    Filmstrip.tsx               # Horizontal thumbnail strip
+    GifExport.tsx               # Download as GIF button
+    GridView.tsx                # All images in grid
+    ImageViewer.tsx             # Main viewer with mode tabs
+    ProgressIndicator.tsx       # Generation progress bar
+    SideBySide.tsx              # Two images side by side
+    UploadForm.tsx              # Upload + settings (iterations, fast mode)
   /hooks
-    useRun.ts                   # Run state management
-    useGeneration.ts            # Generation orchestration
+    useRun.ts                   # All run state and generation logic
+  /lib
+    constants.ts                # Prompts, defaults, thresholds
+    db.ts                       # IndexedDB operations + image utilities
+    gif.ts                      # GIF generation using gif.js
+    types.ts                    # TypeScript interfaces
+  /types
+    gif.js-upgrade.d.ts         # Type declarations for gif.js
 /public
   /demo
-    run.json
-    iteration-000.png ... iteration-010.png
+    run.json                    # Demo manifest
+    iteration-000.svg ... 010   # SVG placeholder images
+  gif.worker.js                 # Web worker for GIF encoding
+/scripts
+  generate-demo-placeholders.js # Script to regenerate demo SVGs
 ```
 
 ---
 
-## Key Technical Notes
+## API Route Parameters
 
-### OpenAI API Usage
+**POST `/api/generate`**
 
 ```typescript
-// Using images.edit endpoint with gpt-image-1
-const response = await openai.images.edit({
-  model: "gpt-image-1",
-  image: [imageFile],  // File object or buffer
-  prompt: "Recreate this image as faithfully and exactly as possible...",
-  size: "1024x1024"
-});
+{
+  imageBase64: string;      // Base64-encoded input image
+  prompt?: string;          // Override default prompt (optional)
+  size?: '1024x1024' | '1536x1024' | '1024x1536';  // Aspect ratio
+  fastMode?: boolean;       // Use gpt-image-1-mini with lower quality
+}
 ```
 
-### IndexedDB Schema
-
-Two object stores:
-- `runs`: Run metadata (id, status, iterationCount, etc.)
-- `iterations`: Image blobs with metadata (id, runId, index, imageBlob)
-
-### Generation Prompt
-
-```
-Recreate this image as faithfully and exactly as possible. Preserve composition, framing, subject identity, colors, lighting, textures, and all visible details. Do not add, remove, stylize, reinterpret, or redesign anything.
+**Response:**
+```typescript
+{
+  imageBase64?: string;     // Base64-encoded output image
+  error?: string;           // Error message if failed
+}
 ```
 
 ---
 
-## Environment Variables
+## Key Features
 
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Image upload | ✅ | Drag-drop, max 4MB, PNG/JPEG/WebP |
+| Iteration count | ✅ | Slider, 2-20, default 11 |
+| Dynamic aspect ratio | ✅ | Auto-detects and uses best match |
+| Fast Mode | ✅ | ~2x faster, uses mini model |
+| Generation progress | ✅ | Shows "Generating X of Y" |
+| Filmstrip | ✅ | Clickable thumbnails |
+| Comparison slider | ✅ | Draggable overlay vs previous |
+| Side-by-side | ✅ | Current vs original |
+| Grid view | ✅ | All iterations at once |
+| GIF export | ✅ | Download animated GIF |
+| Demo mode | ✅ | View without API key |
+| Persistence | ✅ | Survives page refresh (IndexedDB) |
+
+---
+
+## Configuration
+
+### Environment Variables
+
+```bash
+OPENAI_API_KEY=sk-...   # Required for generation
 ```
-OPENAI_API_KEY=sk-...   # Only required for generation, not for viewing demo
+
+### Constants (`/src/lib/constants.ts`)
+
+```typescript
+GENERATION_PROMPT = "Recreate this image as faithfully..."
+DEFAULT_ITERATION_COUNT = 11
+MAX_FILE_SIZE_MB = 4
+IMAGE_MODEL = 'gpt-image-1'
+LANDSCAPE_THRESHOLD = 1.2   // ratio > 1.2 → landscape
+PORTRAIT_THRESHOLD = 0.83   // ratio < 0.83 → portrait
 ```
+
+---
+
+## Performance Notes
+
+- **Standard mode:** ~30-60 seconds per image (gpt-image-1, high quality)
+- **Fast mode:** ~15-30 seconds per image (gpt-image-1-mini, medium quality)
+- **Total time:** For 10 iterations, expect 5-10 minutes standard, 2.5-5 minutes fast
+- **Browser throttling:** Generation slows/pauses when tab is backgrounded
+
+---
+
+## Known Limitations
+
+1. **Browser tab must stay active** — client-orchestrated loop pauses when backgrounded
+2. **No resume** — if you close the tab mid-generation, you lose progress
+3. **Demo uses SVG placeholders** — should be replaced with real generated images
+4. **No auth/rate limiting** — public app, anyone can generate
+
+---
+
+## Next Steps / Future Enhancements
+
+**Immediate:**
+- [ ] Replace demo SVGs with real generated images
+- [ ] Deploy to Vercel
+- [ ] Commit Fast Mode feature
+
+**Future:**
+- [ ] Server-side orchestration (Trigger.dev) for background generation
+- [ ] Multiple provider support (alternate OpenAI/Stability AI)
+- [ ] Animated playback of sequence
+- [ ] Download as ZIP
+- [ ] Public sharing links
+- [ ] Run history browser
 
 ---
 
 ## Commands
 
 ```bash
-npm install          # Install dependencies
-npm run dev          # Start dev server at localhost:3000
-npm run build        # Build for production
-npm run lint         # Run ESLint
+npm install              # Install dependencies
+npm run dev              # Start dev server (default port 3000)
+npm run dev -- -p 3001   # Start on different port
+npm run build            # Build for production
+npm run lint             # Run ESLint
 ```
-
----
-
-## User Decisions Reference
-
-From conversation with user:
-- Start with 11 iterations (can expand later)
-- Public app (no auth needed yet)
-- GIF download included
-- Both slider and side-by-side comparison
-- Run history from day one (via IndexedDB)
-- One demo fixture checked into repo
-- No rate limiting for now
-- One run at a time (no concurrent runs)
-
----
-
-## Current Status
-
-**Phase:** MVP COMPLETE
-
-**What's done:**
-- All core features implemented and working
-- Build passing
-- Initial commit made
-- Ready for deployment
-
-**What's needed for production:**
-1. Replace demo SVG placeholders with real generated images
-2. Test with actual OpenAI API key
-3. Deploy to Vercel
-4. Add OPENAI_API_KEY to Vercel environment variables
 
 ---
 
 ## Notes for Future Agents
 
-1. **Read spec.md first** — it's the source of truth for requirements
-2. **No backend complexity** — resist adding databases or server storage
-3. **Demo fixture is key** — enables testing without API key
-4. **Client orchestration** — generation loop runs in browser, not server
-5. **IndexedDB for persistence** — survives refresh, cleared on browser data clear
-6. **gpt-image-1 images.edit** — this is the correct API endpoint
+1. **Read spec.md** for full requirements context
+2. **Don't add server storage** — the simplicity is intentional
+3. **Test with Fast Mode first** — much quicker iteration cycles
+4. **The AI SDK recommendations don't apply** — we use OpenAI's `images.edit` endpoint, not text generation
+5. **Demo fixture** — run `node scripts/generate-demo-placeholders.js` to regenerate
+6. **IndexedDB** — data persists until browser data is cleared or user clicks "Start Over"
+7. **Aspect ratio** — automatically detected on upload, stored in hook state
+8. **Generation timing** — each image takes 15-60 seconds, be patient during testing

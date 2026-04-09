@@ -35,6 +35,7 @@ export interface GenerateRequest {
   imageBase64: string;
   prompt?: string;
   size?: ImageSize;
+  fastMode?: boolean;
 }
 
 export interface GenerateResponse {

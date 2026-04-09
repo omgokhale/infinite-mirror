@@ -15,11 +15,13 @@ export default function Home() {
     error,
     selectedIndex,
     viewMode,
+    fastMode,
     createRun,
     loadDemoRun,
     startGeneration,
     setSelectedIndex,
     setViewMode,
+    setFastMode,
     clearRun,
   } = useRun();
 
@@ -54,6 +56,8 @@ export default function Home() {
           onLoadDemo={loadDemoRun}
           isLoading={isLoading}
           hasRun={hasRun}
+          fastMode={fastMode}
+          onFastModeChange={setFastMode}
         />
 
         {/* Loading state */}

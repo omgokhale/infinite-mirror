@@ -44,6 +44,7 @@ export function useRun(): UseRunState & UseRunActions {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('current');
   const [imageSize, setImageSize] = useState<ImageSize>('1024x1024');
+  const [fastMode, setFastMode] = useState(false);
 
   const refreshRun = useCallback(async (runId: string) => {
     const updated = await getRunWithIterations(runId);
@@ -143,7 +144,8 @@ export function useRun(): UseRunState & UseRunActions {
     runId: string,
     currentIndex: number,
     inputImageUrl: string,
-    size: ImageSize
+    size: ImageSize,
+    useFastMode: boolean
   ): Promise<boolean> => {
     try {
       let imageBase64: string;
@@ -165,6 +167,7 @@ export function useRun(): UseRunState & UseRunActions {
           imageBase64,
           prompt: GENERATION_PROMPT,
           size,
+          fastMode: useFastMode,
         }),
       });
 
@@ -206,7 +209,7 @@ export function useRun(): UseRunState & UseRunActions {
           throw new Error(`Missing iteration ${i}`);
         }
 
-        const success = await generateNextIteration(run.id, i, inputIteration.imageUrl, imageSize);
+        const success = await generateNextIteration(run.id, i, inputIteration.imageUrl, imageSize, fastMode);
 
         if (!success) {
           await dbUpdateRun({
@@ -233,7 +236,7 @@ export function useRun(): UseRunState & UseRunActions {
     } finally {
       setIsGenerating(false);
     }
-  }, [run, isGenerating, refreshRun, generateNextIteration, imageSize]);
+  }, [run, isGenerating, refreshRun, generateNextIteration, imageSize, fastMode]);
 
   const clearRun = useCallback(async () => {
     if (run && !run.isDemo) {
@@ -251,12 +254,14 @@ export function useRun(): UseRunState & UseRunActions {
     error,
     selectedIndex,
     viewMode,
+    fastMode,
     createRun,
     loadRun,
     loadDemoRun,
     startGeneration,
     setSelectedIndex,
     setViewMode,
+    setFastMode,
     clearRun,
   };
 }
