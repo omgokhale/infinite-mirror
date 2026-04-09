@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Run, RunWithIterations, IterationWithUrl, ViewMode } from '@/lib/types';
 import {
@@ -13,6 +13,7 @@ import {
   base64ToBlob,
   getImageDimensions,
   getBestImageSize,
+  preloadImage,
 } from '@/lib/db';
 import type { ImageSize } from '@/lib/types';
 import { DEFAULT_ITERATION_COUNT, GENERATION_PROMPT } from '@/lib/constants';
@@ -23,7 +24,10 @@ interface UseRunState {
   isGenerating: boolean;
   error: string | null;
   selectedIndex: number;
+  comparisonIndex: number | null;
   viewMode: ViewMode;
+  fastMode: boolean;
+  autoAdvanceEnabled: boolean;
 }
 
 interface UseRunActions {
@@ -32,7 +36,10 @@ interface UseRunActions {
   loadDemoRun: () => Promise<void>;
   startGeneration: () => Promise<void>;
   setSelectedIndex: (index: number) => void;
+  setComparisonIndex: (index: number | null) => void;
   setViewMode: (mode: ViewMode) => void;
+  setFastMode: (fast: boolean) => void;
+  setAutoAdvance: (enabled: boolean) => void;
   clearRun: () => Promise<void>;
 }
 
@@ -42,15 +49,25 @@ export function useRun(): UseRunState & UseRunActions {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [comparisonIndex, setComparisonIndex] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('current');
   const [imageSize, setImageSize] = useState<ImageSize>('1024x1024');
   const [fastMode, setFastMode] = useState(false);
+  const [autoAdvanceEnabled, setAutoAdvanceEnabled] = useState(true);
+  const autoAdvanceRef = useRef(true);
 
-  const refreshRun = useCallback(async (runId: string) => {
+  // Keep ref in sync with state for use in async callbacks
+  useEffect(() => {
+    autoAdvanceRef.current = autoAdvanceEnabled;
+  }, [autoAdvanceEnabled]);
+
+  const refreshRun = useCallback(async (runId: string): Promise<RunWithIterations | null> => {
     const updated = await getRunWithIterations(runId);
     if (updated) {
       setRun(updated);
+      return updated;
     }
+    return null;
   }, []);
 
   const createRun = useCallback(async (file: File, iterationCount = DEFAULT_ITERATION_COUNT) => {
@@ -222,8 +239,22 @@ export function useRun(): UseRunState & UseRunActions {
           return;
         }
 
-        await refreshRun(run.id);
-        setSelectedIndex(i + 1); // Auto-advance to the newly generated image
+        // Refresh and get the updated run with the new iteration
+        const updatedRun = await refreshRun(run.id);
+
+        // Only auto-advance if enabled (disabled during initial pixel reveal)
+        if (autoAdvanceRef.current) {
+          // Preload the new image before auto-advancing to avoid showing empty gray square
+          const newIteration = updatedRun?.iterations.find(it => it.index === i + 1);
+          if (newIteration) {
+            try {
+              await preloadImage(newIteration.imageUrl);
+            } catch {
+              // If preload fails, still advance (image will load eventually)
+            }
+          }
+          setSelectedIndex(i + 1); // Auto-advance to the newly generated image
+        }
       }
 
       await dbUpdateRun({ id: run.id, status: 'completed' });
@@ -245,6 +276,7 @@ export function useRun(): UseRunState & UseRunActions {
     }
     setRun(null);
     setSelectedIndex(0);
+    setComparisonIndex(null);
     setError(null);
   }, [run]);
 
@@ -254,15 +286,19 @@ export function useRun(): UseRunState & UseRunActions {
     isGenerating,
     error,
     selectedIndex,
+    comparisonIndex,
     viewMode,
     fastMode,
+    autoAdvanceEnabled,
     createRun,
     loadRun,
     loadDemoRun,
     startGeneration,
     setSelectedIndex,
+    setComparisonIndex,
     setViewMode,
     setFastMode,
+    setAutoAdvance: setAutoAdvanceEnabled,
     clearRun,
   };
 }

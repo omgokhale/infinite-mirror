@@ -1,6 +1,6 @@
 export const GENERATION_PROMPT = `Recreate this image as faithfully and exactly as possible. Preserve composition, framing, subject identity, colors, lighting, textures, and all visible details. Do not add, remove, stylize, reinterpret, or redesign anything.`;
 
-export const DEFAULT_ITERATION_COUNT = 11;
+export const DEFAULT_ITERATION_COUNT = 8;
 export const MIN_ITERATION_COUNT = 2;
 export const MAX_ITERATION_COUNT = 20;
 

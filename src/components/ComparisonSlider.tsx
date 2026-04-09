@@ -71,7 +71,7 @@ export function ComparisonSlider({
       ref={containerRef}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
-      className="relative w-full aspect-square overflow-hidden rounded-lg cursor-ew-resize select-none bg-neutral-100"
+      className="relative w-full max-h-[60vh] aspect-square overflow-hidden cursor-ew-resize select-none"
     >
       {/* Right image (full) */}
       <img
@@ -109,13 +109,6 @@ export function ComparisonSlider({
         </div>
       </div>
 
-      {/* Labels */}
-      <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/60 text-white text-xs rounded">
-        {leftLabel}
-      </div>
-      <div className="absolute bottom-3 right-3 px-2 py-1 bg-black/60 text-white text-xs rounded">
-        {rightLabel}
-      </div>
     </div>
   );
 }

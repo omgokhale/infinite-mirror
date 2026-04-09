@@ -3,111 +3,182 @@
 import type { IterationWithUrl, ViewMode } from '@/lib/types';
 import { ComparisonSlider } from './ComparisonSlider';
 import { SideBySide } from './SideBySide';
-import { GridView } from './GridView';
+import { PixelReveal } from './PixelReveal';
 
 interface ImageViewerProps {
   iterations: IterationWithUrl[];
   selectedIndex: number;
+  comparisonIndex: number | null;
+  totalCount: number;
   viewMode: ViewMode;
   onSelectIndex: (index: number) => void;
-  onViewModeChange: (mode: ViewMode) => void;
+  showInitialReveal?: boolean;
+  onRevealComplete?: () => void;
 }
 
 export function ImageViewer({
   iterations,
   selectedIndex,
+  comparisonIndex,
+  totalCount,
   viewMode,
   onSelectIndex,
-  onViewModeChange,
+  showInitialReveal = false,
+  onRevealComplete,
 }: ImageViewerProps) {
-  const selectedIteration = iterations.find(it => it.index === selectedIndex);
-  const previousIteration = iterations.find(it => it.index === selectedIndex - 1);
-  const originalIteration = iterations.find(it => it.index === 0);
+  // Find selected iteration, or fall back to the last available if index doesn't exist yet
+  let selectedIteration = iterations.find(it => it.index === selectedIndex);
+  if (!selectedIteration && iterations.length > 0) {
+    // Index doesn't exist yet (state sync issue) - show last available
+    selectedIteration = iterations[iterations.length - 1];
+  }
+
+  // For comparison modes: use comparisonIndex if set, otherwise fall back to defaults
+  const getComparisonIteration = () => {
+    if (comparisonIndex !== null) {
+      return iterations.find(it => it.index === comparisonIndex);
+    }
+    // Default behavior based on view mode
+    if (viewMode === 'vs-previous') {
+      return iterations.find(it => it.index === selectedIndex - 1);
+    }
+    if (viewMode === 'vs-original') {
+      return iterations.find(it => it.index === 0);
+    }
+    return null;
+  };
+
+  const comparisonIteration = getComparisonIteration();
+
+  const canGoPrev = selectedIndex > 0;
+  const canGoNext = selectedIndex < iterations.length - 1;
+
+  const handlePrev = () => {
+    if (canGoPrev) onSelectIndex(selectedIndex - 1);
+  };
+
+  const handleNext = () => {
+    if (canGoNext) onSelectIndex(selectedIndex + 1);
+  };
+
+  // Format labels for comparison views
+  const currentDisplay = selectedIndex.toString().padStart(2, '0');
+  const comparisonDisplay = comparisonIteration
+    ? comparisonIteration.index.toString().padStart(2, '0')
+    : '00';
 
   if (!selectedIteration) {
     return (
-      <div className="aspect-square bg-neutral-100 rounded-lg flex items-center justify-center">
-        <p className="text-neutral-400">Select an iteration</p>
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-white/30">Select an iteration</p>
       </div>
     );
   }
 
-  const viewModes: { mode: ViewMode; label: string; disabled?: boolean }[] = [
-    { mode: 'current', label: 'Current' },
-    { mode: 'vs-previous', label: 'Vs Previous', disabled: selectedIndex === 0 },
-    { mode: 'vs-original', label: 'Vs Original', disabled: selectedIndex === 0 },
-    { mode: 'grid', label: 'Grid' },
-  ];
+  // Determine which image goes on left vs right (lower index on left)
+  const getOrderedImages = () => {
+    if (!comparisonIteration) return null;
+
+    if (comparisonIteration.index < selectedIndex) {
+      return {
+        left: comparisonIteration,
+        right: selectedIteration,
+        leftLabel: comparisonDisplay,
+        rightLabel: currentDisplay,
+      };
+    } else {
+      return {
+        left: selectedIteration,
+        right: comparisonIteration,
+        leftLabel: currentDisplay,
+        rightLabel: comparisonDisplay,
+      };
+    }
+  };
+
+  const orderedImages = getOrderedImages();
 
   return (
-    <div className="space-y-4">
-      {/* View mode tabs */}
-      <div className="flex gap-1 p-1 bg-neutral-100 rounded-lg">
-        {viewModes.map(({ mode, label, disabled }) => (
-          <button
-            key={mode}
-            onClick={() => !disabled && onViewModeChange(mode)}
-            disabled={disabled}
-            className={`
-              flex-1 py-2 px-3 text-sm rounded-md transition-colors
-              ${viewMode === mode
-                ? 'bg-white text-neutral-900 shadow-sm'
-                : 'text-neutral-600 hover:text-neutral-900'
-              }
-              ${disabled ? 'opacity-40 cursor-not-allowed' : ''}
-            `}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+    <div className="flex-1 flex items-center justify-center relative">
+      {/* Invisible click zones for navigation */}
+      <button
+        onClick={handlePrev}
+        disabled={!canGoPrev}
+        className={`absolute left-0 top-0 w-1/2 h-full z-10 ${canGoPrev ? 'cursor-w-resize' : 'cursor-default'}`}
+        aria-label="Previous"
+      />
+      <button
+        onClick={handleNext}
+        disabled={!canGoNext}
+        className={`absolute right-0 top-0 w-1/2 h-full z-10 ${canGoNext ? 'cursor-e-resize' : 'cursor-default'}`}
+        aria-label="Next"
+      />
 
-      {/* Main viewer */}
-      <div className="w-full">
-        {viewMode === 'current' && (
-          <div className="aspect-square bg-neutral-100 rounded-lg overflow-hidden">
-            <img
-              key={selectedIteration.imageUrl}
-              src={selectedIteration.imageUrl}
-              alt={`Iteration ${selectedIndex}`}
-              className="w-full h-full object-contain animate-fade-in"
+      {/* Main content area */}
+      <div className="flex flex-col items-center gap-4 w-full max-w-3xl pointer-events-none">
+        {/* Image viewer */}
+        <div className="w-full">
+          {viewMode === 'current' && (
+            <div className="w-full flex items-center justify-center max-h-[60vh]">
+              {showInitialReveal && selectedIndex === 0 ? (
+                <PixelReveal
+                  src={selectedIteration.imageUrl}
+                  alt={`Iteration ${selectedIndex}`}
+                  className="w-full h-[60vh] flex items-center justify-center"
+                  duration={5000}
+                  onRevealComplete={onRevealComplete}
+                />
+              ) : (
+                <img
+                  src={selectedIteration.imageUrl}
+                  alt={`Iteration ${selectedIndex}`}
+                  className="max-w-full max-h-[60vh] object-contain"
+                />
+              )}
+            </div>
+          )}
+
+          {viewMode === 'vs-previous' && orderedImages && (
+            <div className="pointer-events-auto relative z-20">
+              <ComparisonSlider
+                leftImage={orderedImages.left.imageUrl}
+                rightImage={orderedImages.right.imageUrl}
+                leftLabel={orderedImages.leftLabel}
+                rightLabel={orderedImages.rightLabel}
+              />
+            </div>
+          )}
+
+          {viewMode === 'vs-previous' && !orderedImages && (
+            <div className="w-full flex items-center justify-center">
+              <img
+                src={selectedIteration.imageUrl}
+                alt={`Iteration ${selectedIndex}`}
+                className="max-w-full max-h-[60vh] object-contain"
+              />
+            </div>
+          )}
+
+          {viewMode === 'vs-original' && orderedImages && (
+            <SideBySide
+              leftImage={orderedImages.left.imageUrl}
+              rightImage={orderedImages.right.imageUrl}
+              leftLabel={orderedImages.leftLabel}
+              rightLabel={orderedImages.rightLabel}
             />
-          </div>
-        )}
+          )}
 
-        {viewMode === 'vs-previous' && previousIteration && (
-          <ComparisonSlider
-            leftImage={previousIteration.imageUrl}
-            rightImage={selectedIteration.imageUrl}
-            leftLabel={previousIteration.index === 0 ? 'Original' : `#${previousIteration.index}`}
-            rightLabel={`#${selectedIteration.index}`}
-          />
-        )}
-
-        {viewMode === 'vs-original' && originalIteration && selectedIndex !== 0 && (
-          <SideBySide
-            leftImage={originalIteration.imageUrl}
-            rightImage={selectedIteration.imageUrl}
-            leftLabel="Original"
-            rightLabel={`#${selectedIteration.index}`}
-          />
-        )}
-
-        {viewMode === 'grid' && (
-          <GridView
-            iterations={iterations}
-            selectedIndex={selectedIndex}
-            onSelect={onSelectIndex}
-          />
-        )}
+          {viewMode === 'vs-original' && !orderedImages && (
+            <div className="w-full flex items-center justify-center">
+              <img
+                src={selectedIteration.imageUrl}
+                alt="Original"
+                className="max-w-full max-h-[60vh] object-contain"
+              />
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* Current selection label */}
-      {viewMode !== 'grid' && (
-        <p className="text-center text-sm text-neutral-500">
-          {selectedIndex === 0 ? 'Original Image' : `Iteration ${selectedIndex} of ${iterations.length - 1}`}
-        </p>
-      )}
     </div>
   );
 }

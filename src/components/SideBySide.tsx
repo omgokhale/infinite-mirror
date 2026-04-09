@@ -14,26 +14,20 @@ export function SideBySide({
   rightLabel,
 }: SideBySideProps) {
   return (
-    <div className="flex gap-4 w-full">
-      <div className="flex-1 space-y-2">
-        <div className="aspect-square bg-neutral-100 rounded-lg overflow-hidden">
-          <img
-            src={leftImage}
-            alt={leftLabel}
-            className="w-full h-full object-contain"
-          />
-        </div>
-        <p className="text-xs text-neutral-500 text-center">{leftLabel}</p>
+    <div className="flex gap-4 w-full max-h-[60vh]">
+      <div className="flex-1 flex items-center justify-center">
+        <img
+          src={leftImage}
+          alt={leftLabel}
+          className="max-w-full max-h-[60vh] object-contain"
+        />
       </div>
-      <div className="flex-1 space-y-2">
-        <div className="aspect-square bg-neutral-100 rounded-lg overflow-hidden">
-          <img
-            src={rightImage}
-            alt={rightLabel}
-            className="w-full h-full object-contain"
-          />
-        </div>
-        <p className="text-xs text-neutral-500 text-center">{rightLabel}</p>
+      <div className="flex-1 flex items-center justify-center">
+        <img
+          src={rightImage}
+          alt={rightLabel}
+          className="max-w-full max-h-[60vh] object-contain"
+        />
       </div>
     </div>
   );

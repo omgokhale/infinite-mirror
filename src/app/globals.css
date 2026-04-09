@@ -1,28 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #000000;
+  --foreground: #ffffff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-hedvig);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-hedvig), "Hedvig Letters Sans", sans-serif;
+  cursor: none;
+}
+
+/* Hide cursor on all elements */
+*, *::before, *::after {
+  cursor: none !important;
 }
 
 /* Image transition animation */
@@ -33,4 +32,20 @@ body {
 
 .animate-fade-in {
   animation: fade-in 0.4s ease-out;
+}
+
+/* UI elements blur and fade in */
+@keyframes dissolve-in {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0px);
+  }
+}
+
+.animate-dissolve-in {
+  animation: dissolve-in 0.8s ease-out forwards;
 }

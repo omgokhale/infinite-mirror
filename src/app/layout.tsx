@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Hedvig_Letters_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { CustomCursor } from "@/components/CustomCursor";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const hedvig = Hedvig_Letters_Sans({
+  variable: "--font-hedvig",
   subsets: ["latin"],
+  weight: "400",
 });
 
 const geistMono = Geist_Mono({
@@ -25,9 +27,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${hedvig.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <CustomCursor />
+        {children}
+      </body>
     </html>
   );
 }

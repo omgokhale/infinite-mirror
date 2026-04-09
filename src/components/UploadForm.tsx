@@ -3,25 +3,21 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   DEFAULT_ITERATION_COUNT,
-  MIN_ITERATION_COUNT,
-  MAX_ITERATION_COUNT,
   MAX_FILE_SIZE_BYTES,
-  MAX_FILE_SIZE_MB,
   ACCEPTED_IMAGE_TYPES,
 } from '@/lib/constants';
 
 interface UploadFormProps {
   onUpload: (file: File, iterationCount: number) => Promise<void>;
-  onLoadDemo: () => void;
+  onDemo: () => void;
   isLoading: boolean;
   hasRun: boolean;
   fastMode: boolean;
   onFastModeChange: (enabled: boolean) => void;
 }
 
-export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, onFastModeChange }: UploadFormProps) {
+export function UploadForm({ onUpload, onDemo, isLoading, hasRun, fastMode, onFastModeChange }: UploadFormProps) {
   const [iterationCount, setIterationCount] = useState(DEFAULT_ITERATION_COUNT);
-  const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showWebcam, setShowWebcam] = useState(false);
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
@@ -34,7 +30,7 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
       return 'Please upload a PNG, JPEG, or WebP image';
     }
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return `File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB`;
+      return 'File too large (max 4MB)';
     }
     return null;
   }, []);
@@ -49,26 +45,6 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
     await onUpload(file, iterationCount);
   }, [validateFile, onUpload, iterationCount]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      handleFile(file);
-    }
-  }, [handleFile]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-  }, []);
-
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -76,7 +52,7 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
     }
   }, [handleFile]);
 
-  const handleClick = useCallback(() => {
+  const handlePlusClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
@@ -93,9 +69,9 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
     } catch (err) {
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError') {
-          setError('Camera access denied. Please allow camera access and try again.');
+          setError('Camera access denied');
         } else if (err.name === 'NotFoundError') {
-          setError('No camera found on this device.');
+          setError('No camera found');
         } else {
           setError(`Camera error: ${err.message}`);
         }
@@ -116,14 +92,38 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
     if (!videoRef.current || !webcamReady) return;
 
     const video = videoRef.current;
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+
+    // Calculate 4:3 crop (centered)
+    const targetRatio = 4 / 3;
+    const videoRatio = videoWidth / videoHeight;
+
+    let cropWidth: number, cropHeight: number, cropX: number, cropY: number;
+
+    if (videoRatio > targetRatio) {
+      // Video is wider than 4:3, crop sides
+      cropHeight = videoHeight;
+      cropWidth = videoHeight * targetRatio;
+      cropX = (videoWidth - cropWidth) / 2;
+      cropY = 0;
+    } else {
+      // Video is taller than 4:3, crop top/bottom
+      cropWidth = videoWidth;
+      cropHeight = videoWidth / targetRatio;
+      cropX = 0;
+      cropY = (videoHeight - cropHeight) / 2;
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0);
+    // Draw cropped portion
+    ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
     canvas.toBlob(async (blob) => {
       if (!blob) {
@@ -137,14 +137,12 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
     }, 'image/png', 0.95);
   }, [webcamReady, stopWebcam, handleFile]);
 
-  // Attach stream to video element when it changes
   useEffect(() => {
     if (videoRef.current && webcamStream) {
       videoRef.current.srcObject = webcamStream;
     }
   }, [webcamStream]);
 
-  // Cleanup webcam on unmount
   useEffect(() => {
     return () => {
       if (webcamStream) {
@@ -153,81 +151,91 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
     };
   }, [webcamStream]);
 
+  const handleIterationChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value) && value >= 1 && value <= 20) {
+      setIterationCount(value);
+    }
+  }, []);
+
   if (hasRun) {
     return null;
   }
 
-  return (
-    <div className="w-full max-w-xl mx-auto space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-light tracking-tight">Infinite Mirror</h1>
-        <p className="text-neutral-500 text-sm">
-          Watch AI drift as it tries to faithfully recreate an image, over and over
-        </p>
-      </div>
-
-      <button
-        onClick={onLoadDemo}
-        disabled={isLoading || showWebcam}
-        className="w-full py-3 px-4 border border-neutral-300 rounded-lg text-sm hover:bg-neutral-50 transition-colors disabled:opacity-50"
-      >
-        View Demo
-      </button>
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-neutral-200" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="bg-white px-2 text-neutral-400">or upload your own</span>
-        </div>
-      </div>
-
-      {showWebcam ? (
-        <div className="space-y-4">
-          <div className="relative rounded-lg overflow-hidden bg-neutral-900">
+  if (showWebcam) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center">
+        <div className="w-full max-w-2xl px-8">
+          <div className="relative overflow-hidden bg-neutral-900">
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
               onLoadedMetadata={() => setWebcamReady(true)}
-              className="w-full aspect-video object-cover"
+              className="w-full aspect-[4/3] object-cover"
             />
             {!webcamReady && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-white text-sm">Starting camera...</p>
+                <p className="text-white/50 text-sm">Starting camera...</p>
               </div>
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-4 mt-6 justify-center">
+            {/* Cancel button - X icon */}
             <button
               onClick={stopWebcam}
-              className="flex-1 py-3 px-4 border border-neutral-300 rounded-lg text-sm hover:bg-neutral-50 transition-colors"
+              className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
             >
-              Cancel
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
+            {/* Capture button - Camera icon */}
             <button
               onClick={captureWebcam}
               disabled={!webcamReady || isLoading}
-              className="flex-1 py-3 px-4 bg-neutral-900 text-white rounded-lg text-sm hover:bg-neutral-800 transition-colors disabled:opacity-50"
+              className="w-14 h-14 rounded-full bg-white flex items-center justify-center hover:bg-white/90 transition-colors disabled:opacity-30"
             >
-              Capture
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="1.5">
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
             </button>
           </div>
         </div>
-      ) : (
-        <div className="space-y-3">
-          <div
-            onClick={handleClick}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            className={`
-              border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-              ${dragActive ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-300 hover:border-neutral-400'}
-              ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 flex flex-col">
+      {/* Background video */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover -z-10 blur-sm"
+      >
+        <source src="/background.webm" type="video/webm" />
+        <source src="/background.mp4" type="video/mp4" />
+      </video>
+
+      {/* Title - matches Header positioning: h-14 (56px) centered = 22px from top */}
+      <div className="h-14 flex items-center justify-center">
+        <img src="/logo.svg" alt="Infinite Mirror" className="h-3" />
+      </div>
+
+      {/* Center buttons */}
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex gap-4">
+          {/* File upload button */}
+          <button
+            onClick={handlePlusClick}
+            disabled={isLoading}
+            className="w-40 h-40 rounded-full border border-white/20 flex items-center justify-center hover:border-white/40 transition-colors disabled:opacity-30"
           >
             <input
               ref={fileInputRef}
@@ -237,60 +245,71 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
               disabled={isLoading}
               className="hidden"
             />
-            <div className="space-y-2">
-              <div className="text-4xl">🖼️</div>
-              <p className="text-sm text-neutral-600">
-                {dragActive ? 'Drop image here' : 'Click or drag an image'}
-              </p>
-              <p className="text-xs text-neutral-400">
-                PNG, JPEG, or WebP up to {MAX_FILE_SIZE_MB}MB
-              </p>
-            </div>
-          </div>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+
+          {/* Webcam button */}
           <button
             onClick={startWebcam}
             disabled={isLoading}
-            className="w-full py-3 px-4 border border-neutral-300 rounded-lg text-sm hover:bg-neutral-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-40 h-40 rounded-full border border-white/20 flex items-center justify-center hover:border-white/40 transition-colors disabled:opacity-30"
           >
-            <span>📷</span>
-            <span>Use Webcam</span>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
           </button>
+        </div>
+      </div>
+
+      {/* Error message */}
+      {error && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 mt-32">
+          <p className="text-sm text-red-500">{error}</p>
         </div>
       )}
 
-      {error && (
-        <p className="text-sm text-red-600 text-center">{error}</p>
-      )}
-
-      <div className="flex items-center justify-center gap-4">
-        <label className="text-sm text-neutral-600">Iterations:</label>
-        <input
-          type="range"
-          min={MIN_ITERATION_COUNT}
-          max={MAX_ITERATION_COUNT}
-          value={iterationCount}
-          onChange={(e) => setIterationCount(Number(e.target.value))}
+      {/* Bottom controls */}
+      <div className="pb-8 flex items-center justify-center gap-8">
+        {/* Fast mode toggle */}
+        <button
+          onClick={() => onFastModeChange(!fastMode)}
           disabled={isLoading}
-          className="w-32"
-        />
-        <span className="text-sm font-medium w-8 text-center">{iterationCount}</span>
+          className="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors disabled:opacity-30"
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${fastMode ? 'bg-white' : 'bg-white/30'}`}
+          />
+          <span>Fast mode</span>
+        </button>
+
+        {/* Iterations input */}
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-white/70">Iterations</span>
+          <input
+            type="text"
+            value={iterationCount}
+            onChange={handleIterationChange}
+            disabled={isLoading}
+            className="w-10 h-7 bg-transparent border border-white/20 rounded text-center text-white text-sm focus:outline-none focus:border-white/40 disabled:opacity-30"
+          />
+        </div>
       </div>
 
-      <label className="flex items-center justify-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={fastMode}
-          onChange={(e) => onFastModeChange(e.target.checked)}
-          disabled={isLoading}
-          className="w-4 h-4 rounded border-neutral-300"
-        />
-        <span className="text-sm text-neutral-600">Fast Mode</span>
-        <span className="text-xs text-neutral-400">(~2x faster, more drift)</span>
-      </label>
-
-      <p className="text-xs text-neutral-400 text-center">
-        1 original + {iterationCount - 1} AI recreations
-      </p>
+      {/* Demo button - top right */}
+      <button
+        onClick={onDemo}
+        disabled={isLoading}
+        className="absolute top-4 right-4 p-2 opacity-35 hover:opacity-100 transition-opacity disabled:opacity-20"
+        title="View demo"
+      >
+        <svg width="20" height="20" viewBox="0 0 256 256" fill="currentColor">
+          <path d="M208,88H48a16,16,0,0,0-16,16v96a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V104A16,16,0,0,0,208,88Zm0,112H48V104H208v96ZM48,64a8,8,0,0,1,8-8H200a8,8,0,0,1,0,16H56A8,8,0,0,1,48,64ZM64,32a8,8,0,0,1,8-8H184a8,8,0,0,1,0,16H72A8,8,0,0,1,64,32Z" />
+        </svg>
+      </button>
     </div>
   );
 }

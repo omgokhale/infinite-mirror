@@ -1,13 +1,17 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
-import type { IterationWithUrl } from '@/lib/types';
+import { useRef, useEffect, useCallback } from 'react';
+import type { IterationWithUrl, ViewMode } from '@/lib/types';
+import { LoadingTile } from './LoadingTile';
 
 interface FilmstripProps {
   iterations: IterationWithUrl[];
   totalCount: number;
   selectedIndex: number;
+  comparisonIndex: number | null;
+  viewMode: ViewMode;
   onSelect: (index: number) => void;
+  onComparisonSelect: (index: number | null) => void;
   currentStep: number;
   isGenerating: boolean;
 }
@@ -16,10 +20,21 @@ export function Filmstrip({
   iterations,
   totalCount,
   selectedIndex,
+  comparisonIndex,
+  viewMode,
   onSelect,
+  onComparisonSelect,
   currentStep,
   isGenerating,
 }: FilmstripProps) {
+  // Compute effective comparison index (user-selected or default based on view mode)
+  const getEffectiveComparisonIndex = (): number | null => {
+    if (comparisonIndex !== null) return comparisonIndex;
+    if (viewMode === 'vs-previous' && selectedIndex > 0) return selectedIndex - 1;
+    if (viewMode === 'vs-original' && selectedIndex > 0) return 0;
+    return null;
+  };
+  const effectiveComparisonIndex = getEffectiveComparisonIndex();
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<HTMLButtonElement>(null);
 
@@ -33,6 +48,23 @@ export function Filmstrip({
     }
   }, [selectedIndex]);
 
+  const handleClick = useCallback((e: React.MouseEvent, index: number, isCompleted: boolean) => {
+    if (!isCompleted) return;
+
+    if (e.shiftKey) {
+      // Shift+click sets comparison index
+      if (comparisonIndex === index) {
+        // Clicking the same comparison index clears it
+        onComparisonSelect(null);
+      } else {
+        onComparisonSelect(index);
+      }
+    } else {
+      // Regular click sets primary selection
+      onSelect(index);
+    }
+  }, [comparisonIndex, onSelect, onComparisonSelect]);
+
   const slots = Array.from({ length: totalCount }, (_, i) => {
     const iteration = iterations.find(it => it.index === i);
     return { index: i, iteration };
@@ -41,56 +73,68 @@ export function Filmstrip({
   return (
     <div
       ref={containerRef}
-      className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-neutral-300"
+      className="overflow-x-auto py-4 scrollbar-none"
     >
-      {slots.map(({ index, iteration }) => {
+      <div className="inline-flex gap-3 px-4 min-w-full justify-center">
+        {slots.map(({ index, iteration }) => {
         const isSelected = index === selectedIndex;
+        const isComparison = index === effectiveComparisonIndex && index !== selectedIndex;
         const isCompleted = !!iteration;
         const isCurrentlyGenerating = isGenerating && index === currentStep + 1;
         const isPending = !isCompleted && !isCurrentlyGenerating;
 
         return (
-          <button
-            key={index}
-            ref={isSelected ? selectedRef : null}
-            onClick={() => isCompleted && onSelect(index)}
-            disabled={!isCompleted}
-            className={`
-              relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all
-              ${isSelected ? 'border-neutral-900 ring-2 ring-neutral-900/20' : 'border-transparent'}
-              ${isCompleted ? 'cursor-pointer hover:border-neutral-400' : 'cursor-default'}
-              ${isPending ? 'bg-neutral-100' : ''}
-            `}
-          >
-            {isCompleted && iteration && (
-              <img
-                src={iteration.imageUrl}
-                alt={`Iteration ${index}`}
-                className="w-full h-full object-cover"
-              />
-            )}
+          <div key={index} className="flex flex-col items-center gap-2 flex-shrink-0">
+            <button
+              ref={isSelected ? selectedRef : null}
+              onClick={(e) => handleClick(e, index, isCompleted)}
+              disabled={!isCompleted}
+              className={`
+                relative flex-shrink-0 w-20 h-20 overflow-hidden transition-all duration-300 ease-out
+                ${isCompleted ? 'cursor-pointer' : 'cursor-default'}
+              `}
+              style={{ borderRadius: isSelected ? '50%' : '0' }}
+            >
+              {isCompleted && iteration && (
+                <img
+                  src={iteration.imageUrl}
+                  alt={`Iteration ${index}`}
+                  className="w-full h-full object-cover"
+                />
+              )}
 
-            {isCurrentlyGenerating && (
-              <div className="absolute inset-0 bg-neutral-100 flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
-              </div>
-            )}
+              {isCurrentlyGenerating && (() => {
+                // Get previous iteration's image for the loading effect
+                const prevIteration = iterations.find(it => it.index === currentStep);
+                return prevIteration ? (
+                  <div className="absolute inset-0">
+                    <LoadingTile previousImageUrl={prevIteration.imageUrl} size={80} />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 bg-white/20 backdrop-blur-lg flex items-center justify-center">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  </div>
+                );
+              })()}
 
-            {isPending && (
-              <div className="absolute inset-0 bg-neutral-100 flex items-center justify-center">
-                <div className="w-2 h-2 bg-neutral-300 rounded-full" />
-              </div>
-            )}
+              {isPending && (
+                <div className="absolute inset-0 bg-white/[0.06] backdrop-blur-lg" />
+              )}
+            </button>
 
-            <div className={`
-              absolute bottom-0 left-0 right-0 text-center text-xs py-0.5
-              ${isSelected ? 'bg-neutral-900 text-white' : 'bg-white/80 text-neutral-600'}
-            `}>
-              {index === 0 ? 'Original' : index}
+            {/* Selection indicator dot */}
+            <div className="flex justify-center w-20 h-1.5">
+              {isSelected && (
+                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+              )}
+              {isComparison && (
+                <div className="w-1.5 h-1.5 rounded-full bg-white/50" />
+              )}
             </div>
-          </button>
+          </div>
         );
       })}
+      </div>
     </div>
   );
 }

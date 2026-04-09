@@ -1,18 +1,17 @@
 {
   "id": "demo-run",
   "createdAt": "2026-04-09T02:12:21.162Z",
-  "iterationCount": 11,
+  "iterationCount": 10,
   "images": [
-    "iteration-000.svg",
-    "iteration-001.svg",
-    "iteration-002.svg",
-    "iteration-003.svg",
-    "iteration-004.svg",
-    "iteration-005.svg",
-    "iteration-006.svg",
-    "iteration-007.svg",
-    "iteration-008.svg",
-    "iteration-009.svg",
-    "iteration-010.svg"
+    "0.png",
+    "1.png",
+    "2.png",
+    "3.png",
+    "4.png",
+    "5.png",
+    "6.png",
+    "7.png",
+    "8.png",
+    "9.png"
   ]
 }
