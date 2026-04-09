@@ -75,7 +75,7 @@ export function Filmstrip({
       ref={containerRef}
       className="overflow-x-auto py-4 scrollbar-none"
     >
-      <div className="inline-flex gap-3 px-4 min-w-full justify-center">
+      <div className="group inline-flex gap-2 px-4 min-w-full justify-center">
         {slots.map(({ index, iteration }) => {
         const isSelected = index === selectedIndex;
         const isComparison = index === effectiveComparisonIndex && index !== selectedIndex;
@@ -84,13 +84,13 @@ export function Filmstrip({
         const isPending = !isCompleted && !isCurrentlyGenerating;
 
         return (
-          <div key={index} className="flex flex-col items-center gap-2 flex-shrink-0">
+          <div key={index} className="flex flex-col items-center gap-2 flex-shrink-0 transition-opacity duration-300 group-hover:opacity-70 hover:!opacity-100">
             <button
               ref={isSelected ? selectedRef : null}
               onClick={(e) => handleClick(e, index, isCompleted)}
               disabled={!isCompleted}
               className={`
-                relative flex-shrink-0 w-20 h-20 overflow-hidden transition-all duration-300 ease-out
+                relative flex-shrink-0 w-10 h-10 overflow-hidden transition-all duration-300 ease-out
                 ${isCompleted ? 'cursor-pointer' : 'cursor-default'}
               `}
               style={{ borderRadius: isSelected ? '50%' : '0' }}
@@ -108,7 +108,7 @@ export function Filmstrip({
                 const prevIteration = iterations.find(it => it.index === currentStep);
                 return prevIteration ? (
                   <div className="absolute inset-0">
-                    <LoadingTile previousImageUrl={prevIteration.imageUrl} size={80} />
+                    <LoadingTile previousImageUrl={prevIteration.imageUrl} size={40} />
                   </div>
                 ) : (
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-lg flex items-center justify-center">
@@ -123,7 +123,7 @@ export function Filmstrip({
             </button>
 
             {/* Selection indicator dot */}
-            <div className="flex justify-center w-20 h-1.5">
+            <div className="flex justify-center w-10 h-1.5">
               {isSelected && (
                 <div className="w-1.5 h-1.5 rounded-full bg-white" />
               )}
