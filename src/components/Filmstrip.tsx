@@ -71,10 +71,17 @@ export function Filmstrip({
   });
 
   return (
-    <div
-      ref={containerRef}
-      className="overflow-x-auto py-4 scrollbar-none"
-    >
+    <div className="relative">
+      {/* Edge fade gradients with blur */}
+      <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-black to-transparent z-10 pointer-events-none" />
+      <div className="absolute left-0 top-0 bottom-0 w-32 backdrop-blur-xl z-10 pointer-events-none" style={{ maskImage: 'linear-gradient(to right, black, transparent)' }} />
+      <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-black to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-32 backdrop-blur-xl z-10 pointer-events-none" style={{ maskImage: 'linear-gradient(to left, black, transparent)' }} />
+
+      <div
+        ref={containerRef}
+        className="overflow-x-auto py-4 scrollbar-none"
+      >
       <div className="group inline-flex gap-2 px-4 min-w-full justify-center">
         {slots.map(({ index, iteration }) => {
         const isSelected = index === selectedIndex;
@@ -135,6 +142,7 @@ export function Filmstrip({
         );
       })}
       </div>
+    </div>
     </div>
   );
 }
