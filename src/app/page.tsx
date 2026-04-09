@@ -1,65 +1,142 @@
-import Image from "next/image";
+'use client';
+
+import { useRun } from '@/hooks/useRun';
+import { UploadForm } from '@/components/UploadForm';
+import { Filmstrip } from '@/components/Filmstrip';
+import { ImageViewer } from '@/components/ImageViewer';
+import { ProgressIndicator } from '@/components/ProgressIndicator';
+import { GifExport } from '@/components/GifExport';
 
 export default function Home() {
+  const {
+    run,
+    isLoading,
+    isGenerating,
+    error,
+    selectedIndex,
+    viewMode,
+    createRun,
+    loadDemoRun,
+    startGeneration,
+    setSelectedIndex,
+    setViewMode,
+    clearRun,
+  } = useRun();
+
+  const hasRun = !!run;
+  const canGenerate = run && !run.isDemo && run.status === 'idle' && run.iterations.length > 0;
+  const showViewer = run && run.iterations.length > 0;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="min-h-screen bg-white">
+      <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        {/* Header when run exists */}
+        {hasRun && (
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-light tracking-tight">Infinite Mirror</h1>
+              {run.isDemo && (
+                <span className="text-xs text-neutral-500">Demo Run</span>
+              )}
+            </div>
+            <button
+              onClick={clearRun}
+              className="text-sm text-neutral-500 hover:text-neutral-900"
+            >
+              ← Start Over
+            </button>
+          </div>
+        )}
+
+        {/* Upload form (shown when no run) */}
+        <UploadForm
+          onUpload={createRun}
+          onLoadDemo={loadDemoRun}
+          isLoading={isLoading}
+          hasRun={hasRun}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {/* Loading state */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
+          </div>
+        )}
+
+        {/* Error display */}
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        {/* Main viewer */}
+        {showViewer && (
+          <>
+            <ImageViewer
+              iterations={run.iterations}
+              selectedIndex={selectedIndex}
+              viewMode={viewMode}
+              onSelectIndex={setSelectedIndex}
+              onViewModeChange={setViewMode}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+            {/* Progress indicator */}
+            <ProgressIndicator
+              currentStep={run.currentStep}
+              totalSteps={run.iterationCount}
+              isGenerating={isGenerating}
+            />
+
+            {/* Filmstrip */}
+            <Filmstrip
+              iterations={run.iterations}
+              totalCount={run.iterationCount}
+              selectedIndex={selectedIndex}
+              onSelect={setSelectedIndex}
+              currentStep={run.currentStep}
+              isGenerating={isGenerating}
+            />
+
+            {/* Generate button */}
+            {canGenerate && (
+              <button
+                onClick={startGeneration}
+                disabled={isGenerating}
+                className="w-full py-3 px-4 bg-neutral-900 text-white rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-50"
+              >
+                Generate Sequence
+              </button>
+            )}
+
+            {/* Status messages and actions */}
+            {(run.status === 'completed' || run.isDemo) && run.iterations.length > 1 && (
+              <div className="flex items-center justify-between">
+                {!run.isDemo && (
+                  <p className="text-sm text-green-600">
+                    Generation complete! Explore the drift.
+                  </p>
+                )}
+                {run.isDemo && <div />}
+                <GifExport iterations={run.iterations} disabled={isGenerating} />
+              </div>
+            )}
+
+            {run.status === 'failed' && (
+              <p className="text-center text-sm text-red-600">
+                {run.errorMessage || 'Generation failed'}
+              </p>
+            )}
+          </>
+        )}
+
+        {/* Footer */}
+        <footer className="pt-8 border-t border-neutral-100">
+          <p className="text-xs text-neutral-400 text-center">
+            Infinite Mirror — Watch AI drift as it recreates images
+          </p>
+        </footer>
+      </div>
     </div>
   );
 }

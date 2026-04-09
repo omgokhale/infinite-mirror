@@ -1,0 +1,250 @@
+'use client';
+
+import { useState, useCallback, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import type { Run, RunWithIterations, IterationWithUrl, ViewMode } from '@/lib/types';
+import {
+  createRun as dbCreateRun,
+  updateRun as dbUpdateRun,
+  createIteration,
+  getRunWithIterations,
+  deleteRun,
+  blobToBase64,
+  base64ToBlob,
+} from '@/lib/db';
+import { DEFAULT_ITERATION_COUNT, GENERATION_PROMPT } from '@/lib/constants';
+
+interface UseRunState {
+  run: RunWithIterations | null;
+  isLoading: boolean;
+  isGenerating: boolean;
+  error: string | null;
+  selectedIndex: number;
+  viewMode: ViewMode;
+}
+
+interface UseRunActions {
+  createRun: (file: File, iterationCount?: number) => Promise<void>;
+  loadRun: (runId: string) => Promise<void>;
+  loadDemoRun: () => Promise<void>;
+  startGeneration: () => Promise<void>;
+  setSelectedIndex: (index: number) => void;
+  setViewMode: (mode: ViewMode) => void;
+  clearRun: () => Promise<void>;
+}
+
+export function useRun(): UseRunState & UseRunActions {
+  const [run, setRun] = useState<RunWithIterations | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [viewMode, setViewMode] = useState<ViewMode>('current');
+
+  const refreshRun = useCallback(async (runId: string) => {
+    const updated = await getRunWithIterations(runId);
+    if (updated) {
+      setRun(updated);
+    }
+  }, []);
+
+  const createRun = useCallback(async (file: File, iterationCount = DEFAULT_ITERATION_COUNT) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const run = await dbCreateRun(iterationCount);
+
+      const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+      await createIteration(run.id, 0, blob);
+
+      await dbUpdateRun({ id: run.id, status: 'idle', currentStep: 0 });
+      await refreshRun(run.id);
+      setSelectedIndex(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create run');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [refreshRun]);
+
+  const loadRun = useCallback(async (runId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const loaded = await getRunWithIterations(runId);
+      if (loaded) {
+        setRun(loaded);
+        setSelectedIndex(0);
+      } else {
+        setError('Run not found');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load run');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loadDemoRun = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const manifestRes = await fetch('/demo/run.json');
+      if (!manifestRes.ok) {
+        throw new Error('Demo not available');
+      }
+      const manifest = await manifestRes.json();
+
+      const iterations: IterationWithUrl[] = [];
+      for (let i = 0; i < manifest.images.length; i++) {
+        iterations.push({
+          id: `demo-iteration-${i}`,
+          runId: 'demo-run',
+          index: i,
+          status: 'completed',
+          createdAt: manifest.createdAt,
+          imageUrl: `/demo/${manifest.images[i]}`,
+        });
+      }
+
+      const demoRun: RunWithIterations = {
+        id: 'demo-run',
+        createdAt: manifest.createdAt,
+        status: 'completed',
+        iterationCount: manifest.iterationCount,
+        currentStep: manifest.iterationCount - 1,
+        isDemo: true,
+        iterations,
+      };
+
+      setRun(demoRun);
+      setSelectedIndex(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load demo');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const generateNextIteration = useCallback(async (
+    runId: string,
+    currentIndex: number,
+    inputImageUrl: string
+  ): Promise<boolean> => {
+    try {
+      let imageBase64: string;
+
+      if (inputImageUrl.startsWith('/demo/')) {
+        const res = await fetch(inputImageUrl);
+        const blob = await res.blob();
+        imageBase64 = await blobToBase64(blob);
+      } else {
+        const res = await fetch(inputImageUrl);
+        const blob = await res.blob();
+        imageBase64 = await blobToBase64(blob);
+      }
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64,
+          prompt: GENERATION_PROMPT,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const outputBlob = base64ToBlob(data.imageBase64);
+      await createIteration(runId, currentIndex + 1, outputBlob);
+      await dbUpdateRun({ id: runId, currentStep: currentIndex + 1 });
+
+      return true;
+    } catch (err) {
+      console.error('Generation error:', err);
+      return false;
+    }
+  }, []);
+
+  const startGeneration = useCallback(async () => {
+    if (!run || run.isDemo || isGenerating) return;
+
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      await dbUpdateRun({ id: run.id, status: 'running' });
+      await refreshRun(run.id);
+
+      const totalGenerations = run.iterationCount - 1;
+
+      for (let i = run.currentStep; i < totalGenerations; i++) {
+        const currentRun = await getRunWithIterations(run.id);
+        if (!currentRun) break;
+
+        const inputIteration = currentRun.iterations.find(it => it.index === i);
+        if (!inputIteration) {
+          throw new Error(`Missing iteration ${i}`);
+        }
+
+        const success = await generateNextIteration(run.id, i, inputIteration.imageUrl);
+
+        if (!success) {
+          await dbUpdateRun({
+            id: run.id,
+            status: 'failed',
+            errorMessage: `Failed at iteration ${i + 1}`,
+          });
+          await refreshRun(run.id);
+          setError(`Generation failed at iteration ${i + 1}`);
+          return;
+        }
+
+        await refreshRun(run.id);
+      }
+
+      await dbUpdateRun({ id: run.id, status: 'completed' });
+      await refreshRun(run.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed');
+      if (run) {
+        await dbUpdateRun({ id: run.id, status: 'failed' });
+        await refreshRun(run.id);
+      }
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [run, isGenerating, refreshRun, generateNextIteration]);
+
+  const clearRun = useCallback(async () => {
+    if (run && !run.isDemo) {
+      await deleteRun(run.id);
+    }
+    setRun(null);
+    setSelectedIndex(0);
+    setError(null);
+  }, [run]);
+
+  return {
+    run,
+    isLoading,
+    isGenerating,
+    error,
+    selectedIndex,
+    viewMode,
+    createRun,
+    loadRun,
+    loadDemoRun,
+    startGeneration,
+    setSelectedIndex,
+    setViewMode,
+    clearRun,
+  };
+}

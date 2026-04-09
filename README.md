@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Infinite Mirror
 
-## Getting Started
+Watch AI drift as it tries to faithfully recreate an image, over and over.
 
-First, run the development server:
+## What is this?
+
+Infinite Mirror demonstrates **iterative image drift**. You upload an image, and the app uses OpenAI's image model to "faithfully recreate" it. The output becomes the input for the next iteration. Even though the model tries to recreate exactly, tiny deviations accumulate into visible drift over multiple iterations.
+
+## Features
+
+- Upload any image (PNG, JPEG, WebP, up to 4MB)
+- Generate a sequence of AI recreations (default: 11 images)
+- **Draggable comparison slider** to see differences between iterations
+- **Side-by-side view** comparing any iteration to the original
+- **Grid view** showing all iterations at once
+- **GIF export** to share the progression
+- **Demo mode** to see it in action without an API key
+- All images stored locally in your browser (IndexedDB)
+
+## Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### View the Demo (no API key needed)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Just click "View Demo" on the home page to see a pre-generated progression.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Generate Your Own (requires OpenAI API key)
 
-## Learn More
+1. Copy `.env.example` to `.env.local`
+2. Add your OpenAI API key
+3. Upload an image and click "Generate Sequence"
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cp .env.example .env.local
+# Edit .env.local and add your OPENAI_API_KEY
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## How It Works
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. You upload an image
+2. The app sends it to OpenAI's `gpt-image-1` model with a "recreate faithfully" prompt
+3. The generated image becomes the input for the next iteration
+4. Repeat until the sequence is complete
+5. All images are stored in your browser's IndexedDB
 
-## Deploy on Vercel
+## Tech Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Next.js 16** (App Router)
+- **TypeScript**
+- **Tailwind CSS**
+- **IndexedDB** (via idb) for client-side storage
+- **OpenAI gpt-image-1** for image generation
+- **gif.js** for GIF export
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── page.tsx           # Main page
+│   └── api/generate/      # OpenAI proxy endpoint
+├── components/
+│   ├── UploadForm.tsx     # Image upload + settings
+│   ├── Filmstrip.tsx      # Iteration thumbnails
+│   ├── ImageViewer.tsx    # Main comparison viewer
+│   ├── ComparisonSlider.tsx
+│   ├── SideBySide.tsx
+│   ├── GridView.tsx
+│   └── GifExport.tsx
+├── hooks/
+│   └── useRun.ts          # Run state management
+└── lib/
+    ├── db.ts              # IndexedDB operations
+    ├── types.ts           # TypeScript interfaces
+    ├── constants.ts       # Prompts, defaults
+    └── gif.ts             # GIF generation
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | For generation | Your OpenAI API key |
+
+## Deployment
+
+Deploy to Vercel with one click:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/infinite-mirror)
+
+Add your `OPENAI_API_KEY` in Vercel's environment variables.
+
+## License
+
+MIT
