@@ -67,9 +67,10 @@ export function ImageViewer({
         {viewMode === 'current' && (
           <div className="aspect-square bg-neutral-100 rounded-lg overflow-hidden">
             <img
+              key={selectedIteration.imageUrl}
               src={selectedIteration.imageUrl}
               alt={`Iteration ${selectedIndex}`}
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain animate-fade-in"
             />
           </div>
         )}

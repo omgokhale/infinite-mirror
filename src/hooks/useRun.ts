@@ -223,6 +223,7 @@ export function useRun(): UseRunState & UseRunActions {
         }
 
         await refreshRun(run.id);
+        setSelectedIndex(i + 1); // Auto-advance to the newly generated image
       }
 
       await dbUpdateRun({ id: run.id, status: 'completed' });

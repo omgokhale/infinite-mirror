@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   DEFAULT_ITERATION_COUNT,
   MIN_ITERATION_COUNT,
@@ -23,7 +23,11 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
   const [iterationCount, setIterationCount] = useState(DEFAULT_ITERATION_COUNT);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showWebcam, setShowWebcam] = useState(false);
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const [webcamReady, setWebcamReady] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const validateFile = useCallback((file: File): string | null => {
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
@@ -76,6 +80,79 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
     fileInputRef.current?.click();
   }, []);
 
+  const startWebcam = useCallback(async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      setWebcamStream(stream);
+      setShowWebcam(true);
+      setWebcamReady(false);
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError') {
+          setError('Camera access denied. Please allow camera access and try again.');
+        } else if (err.name === 'NotFoundError') {
+          setError('No camera found on this device.');
+        } else {
+          setError(`Camera error: ${err.message}`);
+        }
+      }
+    }
+  }, []);
+
+  const stopWebcam = useCallback(() => {
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(track => track.stop());
+      setWebcamStream(null);
+    }
+    setShowWebcam(false);
+    setWebcamReady(false);
+  }, [webcamStream]);
+
+  const captureWebcam = useCallback(async () => {
+    if (!videoRef.current || !webcamReady) return;
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        setError('Failed to capture image');
+        return;
+      }
+
+      const file = new File([blob], 'webcam-capture.png', { type: 'image/png' });
+      stopWebcam();
+      await handleFile(file);
+    }, 'image/png', 0.95);
+  }, [webcamReady, stopWebcam, handleFile]);
+
+  // Attach stream to video element when it changes
+  useEffect(() => {
+    if (videoRef.current && webcamStream) {
+      videoRef.current.srcObject = webcamStream;
+    }
+  }, [webcamStream]);
+
+  // Cleanup webcam on unmount
+  useEffect(() => {
+    return () => {
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [webcamStream]);
+
   if (hasRun) {
     return null;
   }
@@ -91,7 +168,7 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
 
       <button
         onClick={onLoadDemo}
-        disabled={isLoading}
+        disabled={isLoading || showWebcam}
         className="w-full py-3 px-4 border border-neutral-300 rounded-lg text-sm hover:bg-neutral-50 transition-colors disabled:opacity-50"
       >
         View Demo
@@ -106,35 +183,80 @@ export function UploadForm({ onUpload, onLoadDemo, isLoading, hasRun, fastMode, 
         </div>
       </div>
 
-      <div
-        onClick={handleClick}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        className={`
-          border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-          ${dragActive ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-300 hover:border-neutral-400'}
-          ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
-        `}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_IMAGE_TYPES.join(',')}
-          onChange={handleFileInput}
-          disabled={isLoading}
-          className="hidden"
-        />
-        <div className="space-y-2">
-          <div className="text-4xl">📷</div>
-          <p className="text-sm text-neutral-600">
-            {dragActive ? 'Drop image here' : 'Click or drag an image'}
-          </p>
-          <p className="text-xs text-neutral-400">
-            PNG, JPEG, or WebP up to {MAX_FILE_SIZE_MB}MB
-          </p>
+      {showWebcam ? (
+        <div className="space-y-4">
+          <div className="relative rounded-lg overflow-hidden bg-neutral-900">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              onLoadedMetadata={() => setWebcamReady(true)}
+              className="w-full aspect-video object-cover"
+            />
+            {!webcamReady && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <p className="text-white text-sm">Starting camera...</p>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={stopWebcam}
+              className="flex-1 py-3 px-4 border border-neutral-300 rounded-lg text-sm hover:bg-neutral-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={captureWebcam}
+              disabled={!webcamReady || isLoading}
+              className="flex-1 py-3 px-4 bg-neutral-900 text-white rounded-lg text-sm hover:bg-neutral-800 transition-colors disabled:opacity-50"
+            >
+              Capture
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          <div
+            onClick={handleClick}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            className={`
+              border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
+              ${dragActive ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-300 hover:border-neutral-400'}
+              ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
+            `}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES.join(',')}
+              onChange={handleFileInput}
+              disabled={isLoading}
+              className="hidden"
+            />
+            <div className="space-y-2">
+              <div className="text-4xl">🖼️</div>
+              <p className="text-sm text-neutral-600">
+                {dragActive ? 'Drop image here' : 'Click or drag an image'}
+              </p>
+              <p className="text-xs text-neutral-400">
+                PNG, JPEG, or WebP up to {MAX_FILE_SIZE_MB}MB
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={startWebcam}
+            disabled={isLoading}
+            className="w-full py-3 px-4 border border-neutral-300 rounded-lg text-sm hover:bg-neutral-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <span>📷</span>
+            <span>Use Webcam</span>
+          </button>
+        </div>
+      )}
 
       {error && (
         <p className="text-sm text-red-600 text-center">{error}</p>
