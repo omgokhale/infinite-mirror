@@ -1,3 +1,5 @@
+README written by Claude; my apologies for the LLM-speak. — Om.
+
 # Infinite Mirror
 
 Watch AI drift as it tries to faithfully recreate an image, over and over.
